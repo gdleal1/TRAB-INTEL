@@ -13,24 +13,52 @@ string_v db "-v",0
 
 string_comp db 128 dup(0) ; string que é comparada com a linha de comando
 
-buffer db 128 dup(0) ; Buffer to store the string
+erro_i db 0
+erro_o db 0
+erro_v db 0
+
+buffer_i db 128 dup(0) ; Buffer to store the string
+flag_i db 0
+buffer_o db 128 dup(0) ; Buffer to store the string
+flag_o db 0
+buffer_v db 128 dup(0) ; Buffer to store the string
+flag_v db 0
+
+conta_carac dw 0
+
 
 CMDLINE db 128 dup(0) ; Buffer para armazenar a linha de comando
+tam_str_cmd dw ? ; Tamanho da string da linha de comando
+arq_in db 128 dup(0) 
+arq_in_padrao db "a.in",0
+arq_out db 128 dup(0)
+arq_out_padrao db "a.out",0
+
+handle_arq_in dw 0
+handle_arq_out dw 0
+
+
+tensao dw 0
+
+t_total dw 0
+
+;; mensagem de arquivos
+
+ok_arq_in db "Arquivo aberto com sucesso",0
+ok_arq_out db "Arquivo criado com sucesso",0
+
 
 igual db 0 ; flag para strings iguais
 msg_igual db "Strings iguais",0
 msg_diferente db "Strings diferentes",0
-msg_igual_i db "Igual i",0
-msg_igual_o db "Igual o",0
-msg_igual_v db "Igual v",0
+msg_teste db "ZERO",CR,LF,0
 
 msg_erro_1 db "Entrada invalida: Nao comecou com -i,-o ou -v",0
-msg_erro_i db "Entrada invalida: Opcao [-i] sem parametro",0
-msg_erro_o db "Entrada invalida: Opcao [-o] sem parametro",0
-msg_erro_v db "Entrada invalida: Opcao [-v] sem parametro",0
-msg_erro_esp_v db "Entrada invalida: Espaco a mais após -v",0
-msg_erro_esp_i db "Entrada invalida: Espaco a mais após -i",0
-msg_erro_esp_o db "Entrada invalida: Espaco a mais após -o",0
+msg_erro_i db "Entrada invalida: Opcao [-i] sem parametro",CR,LF,0
+msg_erro_o db "Entrada invalida: Opcao [-o] sem parametro",CR,LF,0
+msg_erro_v db "Entrada invalida: Opcao [-v] sem parametro",CR,LF,0
+msg_erro_v_t db "O parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0
+
 
 .code
 .startup
@@ -53,203 +81,290 @@ msg_erro_esp_o db "Entrada invalida: Espaco a mais após -o",0
     pop es ; retorna as informações dos registradores de segmentos
     pop ds
 
-    
+    and flag_i,0
+    and flag_o,0
+    and flag_v,0
+    and erro_i,0
+    and erro_o,0
+    and erro_v,0
 
-    lea bx, CMDLINE
-    lea si, buffer
-    add bx,1
+    mov tam_str_cmd,ax
 
-loop_teste_cmd:
 
+    mov ax, tam_str_cmd
+    sub ax,1
+    lea cx, CMDLINE
+    add cx,ax
+    mov bx, cx
+    cmp [bx],'i'
+    je print_erro_i 
+
+
+    cont_prog_i:
+    lea cx, CMDLINE
+    lea si, buffer_i
+    add cx,1
+
+loop_teste_cmd_i:
+    mov bx,cx
+    cmp [bx],0
+    je nome_a_in
+
+    mov bx,cx
+    lea si, buffer_i
     call procura_espaco
 
-    lea di,buffer
+    cmp flag_i,1
+    je verifica_i
+
+    lea di,buffer_i
     lea si,string_i
     call comp_string
     cmp igual,1
     je i_flag
 
-    lea di,buffer
-    lea si,string_o
-    call comp_string
-    cmp igual,1
-    je o_flag
-
-    lea di,buffer
-    lea si,string_v
-    call comp_string
-    cmp igual,1
-    je v_flag
-
-    jmp print_erro_1
+    jmp loop_teste_cmd_i
 
     i_flag:
-        lea di,buffer
-        loop_limpa_buffer1:
-            cmp [di],0
-            je fim_loop_limpa_buffer1
-            mov [di],0
-            inc di
-            jmp loop_limpa_buffer1
-        fim_loop_limpa_buffer1:
+        mov flag_i,1
+        jmp loop_teste_cmd_i
+    
+    verifica_i:
 
-        mov bx,cx
-        lea si, buffer
-        call procura_espaco
-        
-        lea di,buffer
+        lea di,buffer_i
         lea si,string_o
         call comp_string
         cmp igual,1
         je print_erro_i
 
-        lea di,buffer
+        lea di,buffer_i
         lea si,string_v
         call comp_string
         cmp igual,1
         je print_erro_i
 
-        lea si,buffer
-        cmp [si],0
-        je print_erro_i
-        cmp [si],SPACE
-        je print_erro_esp_i
-        cmp [si],CR
-        je print_erro_i
-        cmp[si],LF
-        je print_erro_i
+        lea bx, buffer_i
+        lea si, arq_in
+        call puts_nome_arq
+
+        jmp inic_o
+
+        print_erro_i:
+            lea bx, msg_erro_i
+            call printf_s
+            inc erro_i
+            jmp inic_o
 
 
-        lea		si,buffer
-		call	atoi
-        cmp ax,127
-        je print_erro_i
-        cmp ax,220
-        je print_erro_i
-        jmp fim_prog
+nome_a_in:
+    lea bx, arq_in_padrao
+    lea si, arq_in
+    call puts_nome_arq
+    jmp inic_o
 
-   o_flag: 
-        lea di,buffer
-        loop_limpa_buffer2:
-            cmp [di],0
-            je fim_loop_limpa_buffer2
-            mov [di],0
-            inc di
-            jmp loop_limpa_buffer2
-        fim_loop_limpa_buffer2:
+
+inic_o:
+    mov ax, tam_str_cmd
+    sub ax,1
+    lea cx, CMDLINE
+    add cx,ax
+    mov bx, cx
+    cmp [bx],'o'
+    je print_erro_o
+    
+
+    cont_prog_o:
+    lea cx, CMDLINE
+    lea si, buffer_o
+    add cx,1
+
+    loop_teste_cmd_o:
+        mov bx,cx
+        cmp [bx],0
+        je nome_a_out
 
         mov bx,cx
-        lea si, buffer
+        lea si, buffer_o
         call procura_espaco
 
-        lea di,buffer
+        cmp flag_o,1
+        je verifica_o
+
+        lea di,buffer_o
+        lea si,string_o
+        call comp_string
+        cmp igual,1
+        je o_flag
+
+        jmp loop_teste_cmd_o
+
+    o_flag:
+        mov flag_o,1
+        jmp loop_teste_cmd_o
+    
+    verifica_o:
+
+        lea di,buffer_o
         lea si,string_i
         call comp_string
         cmp igual,1
         je print_erro_o
 
-        lea di,buffer
+        lea di,buffer_o
         lea si,string_v
         call comp_string
         cmp igual,1
         je print_erro_o
 
-        lea si,buffer
-        cmp [si],0
-        je print_erro_o
-        cmp [si],SPACE
-        je print_erro_esp_o
-        cmp [si],CR
-        je print_erro_o
-        cmp[si],LF
-        je print_erro_o
+        lea bx, buffer_o
+        lea si, arq_out
+        call puts_nome_arq
 
-        lea		si,buffer
-		call	atoi
-        cmp ax,127
-        je print_erro_o
-        cmp ax,220
-        je print_erro_o
-        jmp fim_prog
+        jmp inic_v
+
+        print_erro_o:
+            lea bx, msg_erro_o
+            call printf_s
+            inc erro_o
+            jmp inic_v
+
+nome_a_out:
+    lea bx, arq_out_padrao
+    lea si, arq_out
+    call puts_nome_arq
+    jmp inic_v
 
 
-   v_flag: 
-        lea di,buffer
-        loop_limpa_buffer3:
-            cmp [di],0
-            je fim_loop_limpa_buffer3
-            mov [di],0
-            inc di
-            jmp loop_limpa_buffer3
-        fim_loop_limpa_buffer3:
+
+inic_v:
+    mov ax, tam_str_cmd
+    sub ax,1
+    lea cx, CMDLINE
+    add cx,ax
+    mov bx, cx
+    cmp [bx],'v'
+    je print_erro_v
+    
+
+    cont_prog_v:
+    lea cx, CMDLINE
+    lea si, buffer_v
+    add cx,1
+
+    loop_teste_cmd_v:
+        mov bx,cx
+        cmp [bx],0
+        je tensao_padrao
 
         mov bx,cx
-        lea si, buffer
+        lea si, buffer_v
         call procura_espaco
 
-        lea di,buffer
+        cmp flag_v,1
+        je verifica_v
+
+        lea di,buffer_v
+        lea si,string_v
+        call comp_string
+        cmp igual,1
+        je v_flag
+
+        jmp loop_teste_cmd_v
+
+    v_flag:
+        mov flag_v,1
+        jmp loop_teste_cmd_v
+    
+    verifica_v:
+
+        lea di,buffer_v
         lea si,string_i
         call comp_string
         cmp igual,1
         je print_erro_v
 
-        lea di,buffer
+        lea di,buffer_v
         lea si,string_o
         call comp_string
         cmp igual,1
         je print_erro_v
+
+        lea	bx,buffer_v
+		call atoi
+
+        cmp ax, 127
+        je arquivos
+        cmp ax, 220
+        je arquivos
+        jmp print_erro_v_t
+
+        jmp arquivos
+
+        print_erro_v:
+            lea bx, msg_erro_v
+            call printf_s
+            inc erro_v
+            jmp fim_prog
         
+        print_erro_v_t:
+            lea bx, msg_erro_v_t
+            call printf_s
+            inc erro_v
+            jmp fim_prog
+    
+    tensao_padrao:
+        mov tensao,127
+        jmp arquivos
 
-        lea si,buffer
-        cmp [si],0
-        je print_erro_v
-        cmp [si],SPACE
-        je print_erro_esp_v
-        cmp [si],CR
-        je print_erro_v
-        cmp[si],LF
-        je print_erro_v
-        jmp fim_prog
 
-    print_erro_1:
-        lea bx,msg_erro_1
-        call printf_s
-        jmp fim_prog
-    
-    print_erro_i:
-        lea bx,msg_erro_i
-        call printf_s
-        jmp fim_prog
-    
-    print_erro_v:
-        lea bx,msg_erro_v
-        call printf_s
-        jmp fim_prog
-    
-    print_erro_o:
-        lea bx,msg_erro_o
-        call printf_s
-        jmp fim_prog
-    
-    print_erro_esp_i:
-        lea bx,msg_erro_esp_i
-        call printf_s
-        jmp fim_prog    
-    
-    print_erro_esp_o:
-        lea bx,msg_erro_esp_o
-        call printf_s
-        jmp fim_prog
+arquivos:
+    cmp erro_i,1
+    je fim_prog
+    cmp erro_o,1
+    je fim_prog
+    cmp erro_v,1
+    je fim_prog
+        
+    mov tensao,ax
 
-    print_erro_esp_v:
-        lea bx,msg_erro_esp_v
+    ;; abre arquivo de entrada
+ 
+    MOV AH, 3DH
+    MOV AL, 0 
+    LEA DX, arq_in
+    INT 21H
+    mov handle_arq_in,ax
+    jnc abriu_arq_in
+
+    ;; cria arquivo de saida
+   cria_arq_out:
+    MOV AH, 3CH
+    MOV CX, 0 
+    LEA DX, arq_out
+    INT 21H
+    mov handle_arq_out,ax
+    jnc criou_arq_out
+    jmp fim_prog
+
+    abriu_arq_in:
+        lea bx, ok_arq_in
+        call printf_s
+        jmp cria_arq_out
+
+    criou_arq_out:
+        lea bx, ok_arq_out
         call printf_s
         jmp fim_prog
-
 
 
 fim_prog: nop
 .exit
+
+
+
+
+
+
 
 
 ;;procura_espaco: rotina para pegar a string até o espaço
@@ -257,18 +372,48 @@ procura_espaco proc near
     mov		dl,[bx]
 	cmp		dl,SPACE
 	je		fim_espaco
+    cmp    dl,0
+    je fim_espaco_zero
 
+    inc conta_carac
     mov		[si],dl
     inc		bx
     inc		si
     jmp		procura_espaco
 
 fim_espaco:
+    inc conta_carac
     mov [si],0   
     inc bx
     mov cx,bx
     ret
+fim_espaco_zero:
+    inc conta_carac
+    mov [si],0
+    mov cx,bx
+    ret
 procura_espaco endp
+
+
+
+puts_nome_arq proc near
+
+mov dl,[bx]
+cmp dl,0
+je fim_puts_nome_arq
+mov [si],dl
+inc si 
+inc bx
+jmp puts_nome_arq
+
+fim_puts_nome_arq:
+    mov [si],0
+    ret
+puts_nome_arq endp
+
+
+
+
 
 
 ;;printf_s: rotina para imprimir strings
@@ -340,7 +485,7 @@ atoi	proc near
 		
 atoi_2:
 		; while (*S!='\0') {
-		cmp		byte ptr[si], 0
+		cmp		byte ptr[bx], 0
 		jz		atoi_1
 
 		; 	A = 10 * A
@@ -349,14 +494,14 @@ atoi_2:
 
 		; 	A = A + *S
 		mov		ch,0
-		mov		cl,[si]
+		mov		cl,[bx]
 		add		ax,cx
 
 		; 	A = A - '0'
 		sub		ax,'0'
 
 		; 	++S
-		inc		si
+		inc		bx
 		
 		;}
 		jmp		atoi_2
@@ -367,5 +512,6 @@ atoi_1:
 
 atoi	endp
 
-
-end
+;--------------------------------------------------------------------
+		end
+;--------------------------------------------------------------------
