@@ -512,6 +512,8 @@ arquivos:
         call comp_fim_arquivo
         cmp igual,1
         je fim_prog
+        cmp cx , 26
+        je fim_prog
         jmp loop_le_linha
   
 fim_prog: nop
