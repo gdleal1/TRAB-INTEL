@@ -3,7 +3,10 @@
 
 CR		equ		13
 LF		equ		10
-SPACE    equ		32
+SPACE    equ	32
+TAB     equ     9
+VIRGULA equ     44
+
 
 .data
 
@@ -16,6 +19,8 @@ string_comp db 128 dup(0) ; string que é comparada com a linha de comando
 erro_i db 0
 erro_o db 0
 erro_v db 0
+
+
 
 buffer_i db 128 dup(0) ; Buffer to store the string
 flag_i db 0
@@ -34,24 +39,37 @@ arq_in_padrao db "a.in",0
 arq_out db 128 dup(0)
 arq_out_padrao db "a.out",0
 
+
+;; ARQUIVOS
 handle_arq_in dw 0
 handle_arq_out dw 0
+fio1 db 128 dup(0)
+fio2 db 128 dup(0)
+fio3 db 128 dup(0)
+fio_atual dw 0
+n_fio db 0
 
-
+conteudo_arq_in db 128 dup(0)
 tensao dw 0
-
 t_total dw 0
-
-;; mensagem de arquivos
-
 ok_arq_in db "Arquivo aberto com sucesso",0
 ok_arq_out db "Arquivo criado com sucesso",0
+erro_arq_in db "Erro: arquivo de entrada nao existe",0
+buffer_arq_in db 128 dup(0)
+end_atual_arqin dw 0
+end_atual_buffer_arqin dw 0
+word_fim db "fim",0
+erro_fio dw 0
+str_erro_linha db "Erro na linha",CR,LF,0
+
+
+
 
 
 igual db 0 ; flag para strings iguais
 msg_igual db "Strings iguais",0
 msg_diferente db "Strings diferentes",0
-msg_teste db "ZERO",CR,LF,0
+msg_teste db "TESTE",CR,LF,0
 
 msg_erro_1 db "Entrada invalida: Nao comecou com -i,-o ou -v",0
 msg_erro_i db "Entrada invalida: Opcao [-i] sem parametro",CR,LF,0
@@ -318,6 +336,7 @@ inic_v:
 
 
 arquivos:
+    and t_total,0
     cmp erro_i,1
     je fim_prog
     cmp erro_o,1
@@ -328,41 +347,208 @@ arquivos:
     mov tensao,ax
 
     ;; abre arquivo de entrada
- 
     MOV AH, 3DH
     MOV AL, 0 
     LEA DX, arq_in
     INT 21H
     mov handle_arq_in,ax
-    jnc abriu_arq_in
-
-    ;; cria arquivo de saida
-   cria_arq_out:
-    MOV AH, 3CH
-    MOV CX, 0 
-    LEA DX, arq_out
-    INT 21H
-    mov handle_arq_out,ax
-    jnc criou_arq_out
+    jnc cria_arq_out
+    lea bx, erro_arq_in
+    call printf_s
     jmp fim_prog
 
-    abriu_arq_in:
-        lea bx, ok_arq_in
-        call printf_s
-        jmp cria_arq_out
+    ;; cria arquivo de saida
+    cria_arq_out:
+        MOV AH, 3CH
+        MOV CX, 0 ; atributos do arquivo
+        LEA DX, arq_out
+        INT 21H
+        mov handle_arq_out,ax
 
-    criou_arq_out:
-        lea bx, ok_arq_out
-        call printf_s
-        jmp fim_prog
+    ;; le o arquivo e coloca num buffer
+    MOV AH, 3FH
+    MOV BX, handle_arq_in
+    MOV CX, 100
+    LEA DX, conteudo_arq_in
+    INT 21H
+
+    ;; conteudo_arq_in: aramazena o cnteudo do arquivo inteiro
+    ;; buffer_arq_in : armazena a linha inteira
+    ;; end_atual_arqin : armazena o endereço atual da linha (serve para passar para a proxima linha)
+    ;; end_atual_buffer_arqin: vai percorrendo a linha para testar os fios e pular tab/espacos
+
+    lea bx, conteudo_arq_in
+    mov cx,bx
+
+    loop_le_linha:
+     
+        inc t_total
+
+        ;; armazena no buffer_arq_in a linha // o cx aramazena o endereco da prox linha
+        mov bx,cx
+        lea si,buffer_arq_in
+        call le_ate_LF
+
+        ;; armazena o inicio da linha no dx // o dx vai percorrendo o buffer
+        lea bx, buffer_arq_in
+        mov dx,bx
+
+        loop_elimina_tab_esp_inicio:
+            mov bx,dx
+            cmp [bx],0
+            je fim_prog
+
+            mov si,dx
+            mov al,[si]
+            cmp al, ' '
+            je elimina_esp_tab
+            cmp al, TAB
+            je elimina_esp_tab
+            jmp cont1
+        
+        elimina_esp_tab:
+            inc dx
+            jmp loop_elimina_tab_esp_inicio
+    
+    
+        cont1:
+
+            ;; le o dx ate encontrar uma virgula --> armazena no fio 1
+            mov bx, dx
+            lea si, fio1
+            call le_ate_virgula
+            
+            ;; testa se o fio possui erro ou nao
+            lea bx,fio1
+            call testa_erro_fio
+
+            cmp erro_fio,1
+            je erro_linha
+            jmp fim_prog
+
+            erro_linha:
+                lea bx, str_erro_linha
+                call printf_s
+                jmp fim_prog
 
 
+
+       ;lea si, buffer_arq_in
+        ;lea di, word_fim
+        ;call comp_string
+       ; cmp igual,1
+        ;je fim_prog
+
+        ;jmp loop_le_linha
+  
 fim_prog: nop
 .exit
 
 
+le_ate_LF proc near
+    mov dl,[bx]
+    cmp dl, LF
+    je fim_le_ate_LF
+    cmp dl,0
+    je fim_le_ate_LF
+    mov [si],dl
+    inc bx 
+    inc si
+    jmp le_ate_LF
+
+    fim_le_ate_LF:
+        mov [si],0
+        inc bx
+        mov cx,bx
+        ret
+le_ate_LF endp
+
+le_ate_virgula_espaco_tab proc near
+    mov dl,[bx]
+    cmp dl, VIRGULA
+    je fim_le_ate_virgula_espaco_tab
+    cmp dl, SPACE
+    je fim_le_ate_virgula_espaco_tab
+    cmp dl, TAB
+    je fim_le_ate_virgula_espaco_tab
+    mov [si],dl
+    inc bx 
+    inc si
+    jmp le_ate_virgula_espaco_tab
+
+    fim_le_ate_virgula_espaco_tab:
+        mov [si],0
+        inc bx
+        mov end_atual_buffer_arqin,bx
+        ret
+le_ate_virgula_espaco_tab endp
 
 
+le_ate_virgula proc near
+    mov dl,[bx]
+    cmp dl, VIRGULA
+    je fim_le_ate_virgula
+    mov [si],dl
+    inc bx 
+    inc si
+    jmp le_ate_virgula
+
+    fim_le_ate_virgula:
+        mov [si],0
+        inc bx
+        mov dx,bx
+        ret
+le_ate_virgula endp
+
+    
+;; testa se o fio tem erro, ou seja, se após um espaco ou tab , vem um numero -> se sim, aumento o flag de erro
+testa_erro_fio proc near
+    and erro_fio,0
+
+    mov dl,[bx]
+    cmp dl,0
+    je fim_testa_erro_fio
+    cmp dl,SPACE
+    je testa_num_pos_espaco
+    cmp dl,TAB
+    je testa_num_pos_tab
+    
+    cont_test_erro_fio:
+        inc bx
+        jmp testa_erro_fio
+
+    fim_testa_erro_fio:
+        ret
+    
+    testa_num_pos_espaco:
+        mov si,bx
+        inc si
+        mov al,[si]
+        cmp al,0
+        je cont_test_erro_fio
+        cmp al,SPACE
+        je cont_test_erro_fio
+        cmp al,TAB
+        je cont_test_erro_fio
+        jmp fim_testa_erro_fio_erro
+    
+    testa_num_pos_tab:
+        mov si,bx
+        inc si
+        mov al,[si]
+        cmp al,0
+        je cont_test_erro_fio
+        cmp al,SPACE
+        je cont_test_erro_fio
+        cmp al,TAB
+        je cont_test_erro_fio
+        jmp fim_testa_erro_fio_erro
+    
+    fim_testa_erro_fio_erro:
+        mov erro_fio,1
+        ret
+        
+testa_erro_fio endp
 
 
 
