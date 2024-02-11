@@ -20,6 +20,8 @@ erro_i db 0
 erro_o db 0
 erro_v db 0
 
+cont_limpa_buffer dw 128
+
 
 
 buffer_i db 128 dup(0) ; Buffer to store the string
@@ -63,7 +65,7 @@ erro_fio dw 0
 str_erro_linha db "Erro na linha",CR,LF,0
 
 
-
+cont_test dw 0
 
 
 igual db 0 ; flag para strings iguais
@@ -383,21 +385,38 @@ arquivos:
     loop_le_linha:
      
         inc t_total
+        inc cont_test
+        
+        mov bx,128
+        lea si,fio1
+        call limpa_buffer
+        
+        mov bx,128
+        lea si, fio2
+        call limpa_buffer
 
-        ;; armazena no buffer_arq_in a linha // o cx aramazena o endereco da prox linha
+        mov bx,128
+        lea si, fio3
+        call limpa_buffer
+
+        mov bx,128
+        lea si, buffer_arq_in
+        call limpa_buffer
+
+
+
+        ;; armazena no buffer_arq_in a linha // o cx armazena o endereco da prox linha
+
         mov bx,cx
         lea si,buffer_arq_in
         call le_ate_LF
 
+       
         ;; armazena o inicio da linha no dx // o dx vai percorrendo o buffer
         lea bx, buffer_arq_in
         mov dx,bx
 
         loop_elimina_tab_esp_inicio:
-            mov bx,dx
-            cmp [bx],0
-            je fim_prog
-
             mov si,dx
             mov al,[si]
             cmp al, ' '
@@ -417,78 +436,111 @@ arquivos:
             mov bx, dx
             lea si, fio1
             call le_ate_virgula
-            
+
             ;; testa se o fio possui erro ou nao
             lea bx,fio1
             call testa_erro_fio
 
             cmp erro_fio,1
             je erro_linha
-            jmp fim_prog
+            jmp loop_elimina_tab_esp_inicio2
 
             erro_linha:
                 lea bx, str_erro_linha
                 call printf_s
-                jmp fim_prog
+                jmp test_fim_loop_le_linha
 
 
+    loop_elimina_tab_esp_inicio2:
+            mov si,dx
+            mov al,[si]
+            cmp al, ' '
+            je elimina_esp_tab2
+            cmp al, TAB
+            je elimina_esp_tab2
+            jmp cont2
+        
+        elimina_esp_tab2:
+            inc dx
+            jmp loop_elimina_tab_esp_inicio2
+    
+    
+        cont2:
+            ;; le o dx ate encontrar uma virgula --> armazena no fio 1
+            mov bx,dx
+            lea si, fio2
+            call le_ate_virgula
 
-       ;lea si, buffer_arq_in
-        ;lea di, word_fim
-        ;call comp_string
-       ; cmp igual,1
-        ;je fim_prog
+            ;; testa se o fio possui erro ou nao
+            lea bx,fio2
+            call testa_erro_fio
 
-        ;jmp loop_le_linha
+            cmp erro_fio,1
+            je erro_linha
+            jmp loop_elimina_tab_esp_inicio3
+    
+    loop_elimina_tab_esp_inicio3:
+            mov si,dx
+            mov al,[si]
+            cmp al, ' '
+            je elimina_esp_tab3
+            cmp al, TAB
+            je elimina_esp_tab3
+            jmp cont3
+        
+        elimina_esp_tab3:
+            inc dx
+            jmp loop_elimina_tab_esp_inicio3
+    
+    
+        cont3:
+
+            ;; le o dx ate encontrar uma virgula --> armazena no fio 1
+            mov bx, dx
+            lea si, fio3
+            call le_buffer_ate_lf
+            
+            ;; testa se o fio possui erro ou nao
+            lea bx,fio3
+            call testa_erro_fio
+
+            cmp erro_fio,1
+            je erro_linha
+            
+   test_fim_loop_le_linha:
+        mov bx,cx
+        call comp_fim_arquivo
+        cmp igual,1
+        je fim_prog
+        jmp loop_le_linha
   
 fim_prog: nop
 .exit
 
 
 le_ate_LF proc near
-    mov dl,[bx]
-    cmp dl, LF
+    mov al,[bx]
+    cmp al, LF
     je fim_le_ate_LF
-    cmp dl,0
-    je fim_le_ate_LF
-    mov [si],dl
+    mov [si],al
     inc bx 
     inc si
     jmp le_ate_LF
 
     fim_le_ate_LF:
-        mov [si],0
+        mov [si],LF
         inc bx
         mov cx,bx
         ret
 le_ate_LF endp
 
-le_ate_virgula_espaco_tab proc near
-    mov dl,[bx]
-    cmp dl, VIRGULA
-    je fim_le_ate_virgula_espaco_tab
-    cmp dl, SPACE
-    je fim_le_ate_virgula_espaco_tab
-    cmp dl, TAB
-    je fim_le_ate_virgula_espaco_tab
-    mov [si],dl
-    inc bx 
-    inc si
-    jmp le_ate_virgula_espaco_tab
-
-    fim_le_ate_virgula_espaco_tab:
-        mov [si],0
-        inc bx
-        mov end_atual_buffer_arqin,bx
-        ret
-le_ate_virgula_espaco_tab endp
 
 
 le_ate_virgula proc near
-    mov dl,[bx]
-    cmp dl, VIRGULA
+    mov al,[bx]
+    cmp al, VIRGULA
     je fim_le_ate_virgula
-    mov [si],dl
+    mov [si],al
     inc bx 
     inc si
     jmp le_ate_virgula
@@ -500,17 +552,70 @@ le_ate_virgula proc near
         ret
 le_ate_virgula endp
 
+le_buffer_ate_lf proc near
+    mov al,[bx]
+    cmp al, LF
+    je fim_le_buffer_ate_lf
+    mov [si],al
+    inc bx 
+    inc si
+    jmp le_buffer_ate_lf
+
+    fim_le_buffer_ate_lf:
+        mov [si],0
+        inc bx
+        mov dx,bx
+        ret
+le_buffer_ate_lf endp
+
+limpa_buffer_ate_lf proc near
+    mov al,[si]
+    cmp al, LF
+    je fim_limpa_buffer_ate_lf
+    mov [si],0
+    inc si
+    jmp limpa_buffer_ate_lf
+
+    fim_limpa_buffer_ate_lf:
+        mov [si],0
+        ret
+limpa_buffer_ate_lf endp
+
+comp_fim_arquivo proc near
+    
+    and igual,0
+    mov al,[bx]
+    mov dl , [si]
+    cmp al,0
+    je fim_comp_fim_arquivo_igu
+    inc bx
+    inc si
+    cmp al,dl
+    jne fim_comp_fim_arquivo_dif
+    jmp comp_fim_arquivo
+    
+    fim_comp_fim_arquivo_igu:
+        inc igual
+        ret
+    fim_comp_fim_arquivo_dif:
+        ret
+
+comp_fim_arquivo endp
+    
+
+
+
     
 ;; testa se o fio tem erro, ou seja, se após um espaco ou tab , vem um numero -> se sim, aumento o flag de erro
 testa_erro_fio proc near
     and erro_fio,0
 
-    mov dl,[bx]
-    cmp dl,0
+    mov al,[bx]
+    cmp al,0
     je fim_testa_erro_fio
-    cmp dl,SPACE
+    cmp al,SPACE
     je testa_num_pos_espaco
-    cmp dl,TAB
+    cmp al,TAB
     je testa_num_pos_tab
     
     cont_test_erro_fio:
@@ -549,6 +654,19 @@ testa_erro_fio proc near
         ret
         
 testa_erro_fio endp
+
+
+limpa_buffer proc near
+    mov [si],0
+    dec bx
+    cmp bx,0
+    je fim_limpa_buffer
+    inc si
+    jmp limpa_buffer
+
+    fim_limpa_buffer:
+        ret
+limpa_buffer endp
 
 
 
