@@ -485,12 +485,18 @@ arquivos:
                 mov n_linha,ax
                 lea bx, n_linha_str
                 call sprintf_w
+                lea bx, str_linha
+                lea si, str_erro_linha
+                lea di, n_linha_str
 
                 push cx
                 push dx
                 call prepara_msg_erro
                 pop cx
                 pop dx
+
+                lea bx, str_erro_linha
+                call printf_s
 
                 jmp test_fim_loop_le_linha
 
@@ -598,7 +604,7 @@ fim_prog: nop
 .exit
 
 ;; si eh a mensagem inteira
-prepara_msg_erro near
+prepara_msg_erro proc near
 
     mov al,[bx]
     cmp al,0
@@ -648,15 +654,8 @@ prepara_msg_erro near
         inc si
         mov[si],0
         ret
-        
+
 prepara_msg_erro endp
-
-
-
-
-
-
-
 
 
 
