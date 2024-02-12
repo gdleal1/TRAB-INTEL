@@ -20,7 +20,14 @@ erro_i db 0
 erro_o db 0
 erro_v db 0
 
+salva_regc dw 0
+salva_regd dw 0
+
 cont_limpa_buffer dw 128
+
+sw_n	dw	0
+sw_f	db	0
+sw_m	dw	0
 
 
 
@@ -48,8 +55,17 @@ handle_arq_out dw 0
 fio1 db 128 dup(0)
 fio2 db 128 dup(0)
 fio3 db 128 dup(0)
-fio_atual dw 0
-n_fio db 0
+fio1_num dw 0
+fio2_num dw 0
+fio3_num dw 0
+fio1_str db 128 dup (0)
+fio2_str db 128 dup (0)
+fio3_str db 128 dup (0)
+
+t_total_str db 128 dup(0)
+n_linha dw 0
+n_linha_str db 128 dup(0)
+
 
 conteudo_arq_in db 128 dup(0)
 tensao dw 0
@@ -62,7 +78,10 @@ end_atual_arqin dw 0
 end_atual_buffer_arqin dw 0
 word_fim db "fim",0
 erro_fio dw 0
-str_erro_linha db "Erro na linha",CR,LF,0
+str_erro_linha db 128 dup(0)
+
+str_linha db "Linha ",0
+str_invalido db " invalido: ",0
 
 
 cont_test dw 0
@@ -386,7 +405,9 @@ arquivos:
      
         inc t_total
         inc cont_test
+
         
+        ;; limpas os buffers
         mov bx,128
         lea si,fio1
         call limpa_buffer
@@ -402,7 +423,6 @@ arquivos:
         mov bx,128
         lea si, buffer_arq_in
         call limpa_buffer
-
 
 
         ;; armazena no buffer_arq_in a linha // o cx armazena o endereco da prox linha
@@ -437,17 +457,41 @@ arquivos:
             lea si, fio1
             call le_ate_virgula
 
+            ;; coloca na variavel a versao em numero do fio
+            lea bx, fio1
+            lea si,fio1_str
+            call pega_string_fio
+            lea bx,fio1_str
+            call atoi
+            mov fio1_num,ax
+
             ;; testa se o fio possui erro ou nao
             lea bx,fio1
             call testa_erro_fio
 
             cmp erro_fio,1
             je erro_linha
+
+            cmp fio1_num,0
+            jb erro_linha
+
+            cmp fio1_num,499
+            ja erro_linha
+
             jmp loop_elimina_tab_esp_inicio2
 
             erro_linha:
-                lea bx, str_erro_linha
-                call printf_s
+                mov ax,t_total
+                mov n_linha,ax
+                lea bx, n_linha_str
+                call sprintf_w
+
+                push cx
+                push dx
+                call prepara_msg_erro
+                pop cx
+                pop dx
+
                 jmp test_fim_loop_le_linha
 
 
@@ -471,12 +515,30 @@ arquivos:
             lea si, fio2
             call le_ate_virgula
 
+            ;; coloca na variavel a versao em numero do fio
+            lea bx, fio2
+            lea si,fio2_str
+            call pega_string_fio
+            lea bx,fio2_str
+            call atoi
+            mov fio2_num,ax
+
+
             ;; testa se o fio possui erro ou nao
             lea bx,fio2
             call testa_erro_fio
 
             cmp erro_fio,1
             je erro_linha
+
+            cmp fio2_num,0
+            jb erro_linha
+
+            cmp fio2_num,499
+            ja erro_linha
+
+        
+
             jmp loop_elimina_tab_esp_inicio3
     
     loop_elimina_tab_esp_inicio3:
@@ -499,13 +561,29 @@ arquivos:
             mov bx, dx
             lea si, fio3
             call le_buffer_ate_lf
-            
+
+            ;; coloca na variavel a versao em numero do fio
+            lea bx, fio3
+            lea si,fio3_str
+            call pega_string_fio
+            lea bx,fio3_str
+            call atoi
+            mov fio3_num,ax
+   
             ;; testa se o fio possui erro ou nao
             lea bx,fio3
             call testa_erro_fio
 
             cmp erro_fio,1
             je erro_linha
+
+            cmp fio3_num,0
+            jb erro_linha
+
+            cmp fio3_num,499
+            ja erro_linha
+
+            
             
    test_fim_loop_le_linha:
         mov bx,cx
@@ -518,6 +596,93 @@ arquivos:
   
 fim_prog: nop
 .exit
+
+;; si eh a mensagem inteira
+prepara_msg_erro near
+
+    mov al,[bx]
+    cmp al,0
+    je continua_prepara
+    mov [si],al
+    inc bx
+    inc si
+    jmp prepara_msg_erro
+
+    continua_prepara:
+        mov al, [di]
+        cmp al,0
+        je continua_prepara2
+        mov [si],al
+        inc di
+        inc si
+        jmp continua_prepara
+    
+    continua_prepara2:
+        lea bx, str_invalido
+        
+        loop_continua_prepara2:
+            mov al,[bx]
+            cmp al,0
+            je continua_prepara3
+            mov [si],al
+            inc bx
+            inc si
+            jmp loop_continua_prepara2
+    
+    continua_prepara3:
+        lea di,buffer_arq_in
+
+        loop_continua_prepara3:
+            mov al, [di]
+            cmp al,LF
+            je continua_prepara4
+            mov [si],al
+            inc di
+            inc si
+            jmp loop_continua_prepara3
+    
+    continua_prepara4:
+        mov [si],CR
+        inc si
+        mov [si],LF
+        inc si
+        mov[si],0
+        ret
+        
+prepara_msg_erro endp
+
+
+
+
+
+
+
+
+
+
+
+pega_string_fio proc near
+
+    mov al,[bx]
+    cmp al,TAB 
+    je fim_pega_string_fio
+    cmp al,SPACE
+    je fim_pega_string_fio
+    cmp al,0
+    je fim_pega_string_fio
+
+    mov [si],al
+    inc si
+    inc bx
+    jmp pega_string_fio
+
+    fim_pega_string_fio:
+        mov [si],0
+        ret
+pega_string_fio endp
+
+
+
 
 
 le_ate_LF proc near
@@ -582,6 +747,8 @@ limpa_buffer_ate_lf proc near
         mov [si],0
         ret
 limpa_buffer_ate_lf endp
+
+
 
 comp_fim_arquivo proc near
     
@@ -783,9 +950,9 @@ fim:
 
 
 
-
 atoi	proc near
-
+        push dx
+        push cx
 		; A = 0;
 		mov		ax,0
 		
@@ -793,6 +960,12 @@ atoi_2:
 		; while (*S!='\0') {
 		cmp		byte ptr[bx], 0
 		jz		atoi_1
+
+        cmp byte ptr[bx], '0'
+        jb atoi_1
+
+        cmp byte ptr[bx], '9'
+        ja atoi_1
 
 		; 	A = 10 * A
 		mov		cx,10
@@ -813,11 +986,128 @@ atoi_2:
 		jmp		atoi_2
 
 atoi_1:
-		; return
+		pop cx
+        pop dx
 		ret
 
 atoi	endp
 
+
+
+
+;;- Escrever uma rotina para converter um n�mero com 16 bits em um string
+;	- O valor de 16 bits entra no registrador AX
+;	- O ponteiro para o string entra em DS:BX
+;	- Um string � uma seq��ncia de caracteres ASCII que termina com 00H (�\0�)
+
+;Fun��o: Converte um inteiro (n) para (string)
+;		 sprintf(string, "%d", n)
+;
+;void sprintf_w(char *string->BX, WORD n->AX) {
+;	k=5;
+;	m=10000;
+;	f=0;
+;	do {
+;		quociente = n / m : resto = n % m;	// Usar instru��o DIV
+;		if (quociente || f) {
+;			*string++ = quociente+'0'
+;			f = 1;
+;		}
+;		n = resto;
+;		m = m/10;
+;		--k;
+;	} while(k);
+;
+;	if (!f)
+;		*string++ = '0';
+;	*string = '\0';
+;}
+;
+;Associa��o de variaveis com registradores e mem�ria
+;	string	-> bx
+;	k		-> cx
+;	m		-> sw_m dw
+;	f		-> sw_f db
+;	n		-> sw_n	dw
+;--------------------------------------------------------------------
+
+sprintf_w	proc	near
+
+push dx
+push cx
+
+;void sprintf_w(char *string, WORD n) {
+	mov		sw_n,ax
+
+;	k=5;
+	mov		cx,5
+	
+;	m=10000;
+	mov		sw_m,10000
+	
+;	f=0;
+	mov		sw_f,0
+	
+;	do {
+sw_do:
+
+;		quociente = n / m : resto = n % m;	// Usar instru��o DIV
+	mov		dx,0
+	mov		ax,sw_n
+	div		sw_m
+	
+;		if (quociente || f) {
+;			*string++ = quociente+'0'
+;			f = 1;
+;		}
+	cmp		al,0
+	jne		sw_store
+	cmp		sw_f,0
+	je		sw_continue
+sw_store:
+	add		al,'0'
+	mov		[bx],al
+	inc		bx
+	
+	mov		sw_f,1
+sw_continue:
+	
+;		n = resto;
+	mov		sw_n,dx
+	
+;		m = m/10;
+	mov		dx,0
+	mov		ax,sw_m
+	mov		bp,10
+	div		bp
+	mov		sw_m,ax
+	
+;		--k;
+	dec		cx
+	
+;	} while(k);
+	cmp		cx,0
+	jnz		sw_do
+
+;	if (!f)
+;		*string++ = '0';
+	cmp		sw_f,0
+	jnz		sw_continua2
+	mov		[bx],'0'
+	inc		bx
+sw_continua2:
+
+
+;	*string = '\0';
+	mov		byte ptr[bx],0
+		
+;}
+    pop cx
+    pop dx
+	ret
+		
+sprintf_w	endp
 ;--------------------------------------------------------------------
 		end
 ;--------------------------------------------------------------------
+
