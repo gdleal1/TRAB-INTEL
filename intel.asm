@@ -23,6 +23,8 @@ erro_v db 0
 salva_regc dw 0
 salva_regd dw 0
 
+str_lf db LF,0
+
 cont_limpa_buffer dw 128
 
 sw_n	dw	0
@@ -393,6 +395,11 @@ arquivos:
     LEA DX, conteudo_arq_in
     INT 21H
 
+    
+
+
+
+
     ;; conteudo_arq_in: aramazena o cnteudo do arquivo inteiro
     ;; buffer_arq_in : armazena a linha inteira
     ;; end_atual_arqin : armazena o endereço atual da linha (serve para passar para a proxima linha)
@@ -404,8 +411,6 @@ arquivos:
     loop_le_linha:
      
         inc t_total
-        inc cont_test
-
         
         ;; limpas os buffers
         mov bx,128
@@ -420,10 +425,7 @@ arquivos:
         lea si, fio3
         call limpa_buffer
 
-        mov bx,128
-        lea si, buffer_arq_in
-        call limpa_buffer
-
+       
 
         ;; armazena no buffer_arq_in a linha // o cx armazena o endereco da prox linha
 
@@ -481,26 +483,28 @@ arquivos:
             jmp loop_elimina_tab_esp_inicio2
 
             erro_linha:
+                inc cont_test
                 mov ax,t_total
                 mov n_linha,ax
                 lea bx, n_linha_str
+                
                 call sprintf_w
+               
                 lea bx, str_linha
-                lea si, str_erro_linha
-                lea di, n_linha_str
+                call printf_s
 
-                push cx
-                push dx
-                call prepara_msg_erro
-                pop cx
-                pop dx
+                lea bx, n_linha_str
+                call printf_s
 
-                lea bx, str_erro_linha
+                lea bx, str_invalido
+                call printf_s
+
+                lea bx, buffer_arq_in
                 call printf_s
 
                 jmp test_fim_loop_le_linha
 
-
+               
     loop_elimina_tab_esp_inicio2:
             mov si,dx
             mov al,[si]
@@ -603,60 +607,6 @@ arquivos:
 fim_prog: nop
 .exit
 
-;; si eh a mensagem inteira
-prepara_msg_erro proc near
-
-    mov al,[bx]
-    cmp al,0
-    je continua_prepara
-    mov [si],al
-    inc bx
-    inc si
-    jmp prepara_msg_erro
-
-    continua_prepara:
-        mov al, [di]
-        cmp al,0
-        je continua_prepara2
-        mov [si],al
-        inc di
-        inc si
-        jmp continua_prepara
-    
-    continua_prepara2:
-        lea bx, str_invalido
-        
-        loop_continua_prepara2:
-            mov al,[bx]
-            cmp al,0
-            je continua_prepara3
-            mov [si],al
-            inc bx
-            inc si
-            jmp loop_continua_prepara2
-    
-    continua_prepara3:
-        lea di,buffer_arq_in
-
-        loop_continua_prepara3:
-            mov al, [di]
-            cmp al,LF
-            je continua_prepara4
-            mov [si],al
-            inc di
-            inc si
-            jmp loop_continua_prepara3
-    
-    continua_prepara4:
-        mov [si],CR
-        inc si
-        mov [si],LF
-        inc si
-        mov[si],0
-        ret
-
-prepara_msg_erro endp
-
 
 
 
@@ -679,9 +629,6 @@ pega_string_fio proc near
         mov [si],0
         ret
 pega_string_fio endp
-
-
-
 
 
 le_ate_LF proc near
@@ -1031,7 +978,6 @@ atoi	endp
 ;--------------------------------------------------------------------
 
 sprintf_w	proc	near
-
 push dx
 push cx
 
@@ -1109,4 +1055,3 @@ sprintf_w	endp
 ;--------------------------------------------------------------------
 		end
 ;--------------------------------------------------------------------
-
