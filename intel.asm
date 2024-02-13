@@ -14,6 +14,15 @@ string_i db "-i",0
 string_o db "-o",0
 string_v db "-v",0
 
+flag_tensao_padrao db 0 
+
+str_opcao_i db "Opcao [-i]: ",0
+str_opcao_o db "Opcao [-o]: ",0
+str_opcao_v db "Opcao [-v]: ",0
+str_dp db ":",0
+
+str_relatorio_saida db "Relatorio de saida:",CR,LF,0
+
 string_comp db 128 dup(0) ; string que é comparada com a linha de comando
 
 erro_i db 0
@@ -30,6 +39,11 @@ cont_limpa_buffer dw 128
 sw_n	dw	0
 sw_f	db	0
 sw_m	dw	0
+
+t_horas dw 0
+t_min dw 0
+t_sec dw 0
+
 
 
 
@@ -64,12 +78,33 @@ fio1_str db 128 dup (0)
 fio2_str db 128 dup (0)
 fio3_str db 128 dup (0)
 
+t_q_tensao dw 0
+t_q_tensao_h db 128 dup(0)
+t_q_tensao_m db 128 dup(0) 
+t_q_tensao_s db 128 dup(0) 
+
+
+t_sem_tensao dw 0
+t_sem_tensao_h db 128 dup(0)
+t_sem_tensao_m db 128 dup(0) 
+t_sem_tensao_s db 128 dup(0) 
+
+
 t_total_str db 128 dup(0)
 n_linha dw 0
 n_linha_str db 128 dup(0)
 
+str_tensao db 128 dup(0)
 
-conteudo_arq_in db 128 dup(0)
+str_t_total_h db 128 dup(0)
+str_t_total_m db 128 dup(0)
+str_t_total_s db 128 dup(0)
+
+str_t_total db "Tempo total: ",0
+str_0 db "0",0
+str_relatorio db "Relatorio: ",0
+
+conteudo_arq_in db 50000 dup(0)
 tensao dw 0
 t_total dw 0
 ok_arq_in db "Arquivo aberto com sucesso",0
@@ -128,6 +163,7 @@ msg_erro_v_t db "O parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0
     and erro_i,0
     and erro_o,0
     and erro_v,0
+    and flag_tensao_padrao,0
 
     mov tam_str_cmd,ax
 
@@ -355,6 +391,7 @@ inic_v:
     
     tensao_padrao:
         mov tensao,127
+        inc flag_tensao_padrao
         jmp arquivos
 
 
@@ -366,9 +403,12 @@ arquivos:
     je fim_prog
     cmp erro_v,1
     je fim_prog
-        
+
+    cmp flag_tensao_padrao,1
+    je abre_arq_entrada   
     mov tensao,ax
 
+    abre_arq_entrada:
     ;; abre arquivo de entrada
     MOV AH, 3DH
     MOV AL, 0 
@@ -388,22 +428,24 @@ arquivos:
         INT 21H
         mov handle_arq_out,ax
 
-    ;; le o arquivo e coloca num buffer
+    ;; le o arquivo de entrada e coloca num buffer
     MOV AH, 3FH
     MOV BX, handle_arq_in
-    MOV CX, 100
+    MOV CX, 50000
     LEA DX, conteudo_arq_in
     INT 21H
 
-    
 
     ;; conteudo_arq_in: aramazena o cnteudo do arquivo inteiro
     ;; buffer_arq_in : armazena a linha inteira
-    ;; end_atual_arqin : armazena o endereço atual da linha (serve para passar para a proxima linha)
-    ;; end_atual_buffer_arqin: vai percorrendo a linha para testar os fios e pular tab/espacos
-
+    
     lea bx, conteudo_arq_in
     mov cx,bx
+
+    and t_total,0
+    and t_q_tensao,0
+    and t_sem_tensao,0
+
 
     loop_le_linha:
      
@@ -420,7 +462,7 @@ arquivos:
 
         mov bx,128
         lea si, fio3
-        call limpa_buffer    
+        call limpa_buffer  
 
         ;; armazena no buffer_arq_in a linha // o cx armazena o endereco da prox linha
 
@@ -461,6 +503,7 @@ arquivos:
             lea bx,fio1_str
             call atoi
             mov fio1_num,ax
+
 
             ;; testa se o fio possui erro ou nao
             lea bx,fio1
@@ -588,25 +631,378 @@ arquivos:
             cmp fio3_num,499
             ja erro_linha
 
+
+            cmp tensao,127
+            je testa_q_tensao_127
+
+            testa_q_tensao_220:
+                cmp fio1_num,210
+                jl testa_sem_tensao
+
+                cmp fio1_num,230
+                jg testa_sem_tensao
+
+                cmp fio2_num,210
+                jl testa_sem_tensao
+
+                cmp fio2_num,230
+                jg testa_sem_tensao
+
+                cmp fio3_num,210
+                jl testa_sem_tensao
+
+                cmp fio3_num,230
+                jg testa_sem_tensao
+
+                inc t_q_tensao
+                jmp test_fim_loop_le_linha
             
+
+            testa_q_tensao_127:
+                cmp fio1_num,117
+                jl testa_sem_tensao
+
+                cmp fio1_num,137
+                jg testa_sem_tensao
+
+                cmp fio2_num,117
+                jl testa_sem_tensao
+
+                cmp fio2_num,137
+                jg testa_sem_tensao
+
+                cmp fio3_num,117
+                jl testa_sem_tensao
+
+                cmp fio3_num,137
+                jg testa_sem_tensao
+
+                inc t_q_tensao
+                jmp test_fim_loop_le_linha
             
-   test_fim_loop_le_linha:
-        mov bx,cx
+            testa_sem_tensao:
+                cmp fio1_num,10
+                jge test_fim_loop_le_linha
+
+                cmp fio2_num,10
+                jge test_fim_loop_le_linha
+
+                cmp fio3_num,10
+                jge test_fim_loop_le_linha
+
+                inc t_sem_tensao
+                jmp test_fim_loop_le_linha
+     
+            
+   test_fim_loop_le_linha:      
+        mov di,cx
         lea si, word_fim
         call comp_fim_arquivo
         cmp igual,1
-        je fim_prog
+        je relatorio_tela
         cmp cx , 26
-        je fim_prog
+        je relatorio_tela
         jmp loop_le_linha
-  
+
+relatorio_tela:
+    lea bx, str_lf
+    call printf_s
+    lea bx,str_relatorio
+    call printf_s
+    lea bx, str_lf
+    call printf_s
+
+    ;; printa as opcoes escolhida na tela
+    lea bx, str_opcao_i
+    call printf_s
+    lea bx, arq_in
+    call printf_s
+    lea bx, str_lf
+    call printf_s
+    lea bx, str_opcao_o
+    call printf_s
+    lea bx, arq_out
+    call printf_s
+    lea bx, str_lf
+    call printf_s
+    lea bx, str_opcao_v
+    call printf_s
+    mov ax, tensao
+    lea bx, str_tensao
+    call sprintf_w
+    lea bx, str_tensao
+    call printf_s
+    lea bx, str_lf
+    call printf_s
+
+    ;; printa tempo total 
+    and t_horas,0
+    and t_min,0
+    and t_sec,0
+
+    mov ax,t_total
+    call trata_tempo
+
+    lea bx, str_t_total
+    call printf_s
+
+    cmp t_horas,0
+    je talvez_printa_total_min
+
+    cmp t_horas,9
+    ja cont_print_hrs
+    lea bx, str_0
+    call printf_s
+
+    cont_print_hrs:
+    mov ax, t_horas
+    lea bx, str_t_total_h
+    call sprintf_w
+    lea bx, str_t_total_h
+    call printf_s
+    lea bx, str_dp
+    call printf_s
+    jmp printa_total_min
+
+    talvez_printa_total_min:
+        cmp t_min,0
+        je printa_total_sec
+    
+    printa_total_min:
+        cmp t_min,9
+        ja cont_print_min
+        lea bx, str_0
+        call printf_s
+        
+        cont_print_min:
+            mov ax, t_min
+            lea bx, str_t_total_m
+            call sprintf_w
+            lea bx, str_t_total_m
+            call printf_s
+            lea bx, str_dp
+            call printf_s
+            jmp printa_total_sec
+    
+    printa_total_sec:
+        cmp t_sec,9
+        ja cont_print_sec
+        lea bx, str_0
+        call printf_s
+        
+        cont_print_sec:
+            mov ax, t_sec
+            lea bx, str_t_total_s
+            call sprintf_w
+            lea bx, str_t_total_s
+            call printf_s
+    
+    ;;fecha arquivo de entrada
+    mov ah, 3Eh ; Function 3Eh - close file
+    mov bx, handle_arq_in
+    int 21h
+
+jmp relatorio_arqout
+
+
+relatorio_arqout:
+
+    ;; abre arquivo de saida:
+
+    mov ah, 3Dh ; Function 3Dh - open file
+    mov al, 2   ; Open for writing (0 = read, 1 = write, 2 = read/write)
+    lea dx, arq_out
+    int 21h
+
+    ;; escreve no arquivo de saida
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_relatorio_saida
+    mov cx,22  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_opcao_i
+    mov cx,13  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, arq_in
+    mov cx,10  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_lf
+    mov cx,2  ; Length of the string
+    int 21h
+; ---------------------------------------
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_opcao_o
+    mov cx,13  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, arq_out
+    mov cx,10  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_lf
+    mov cx,2  ; Length of the string
+    int 21h
+; ---------------------------------------
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_opcao_v
+    mov cx,13  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_tensao
+    mov cx,4  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_lf
+    mov cx,2  ; Length of the string
+    int 21h
+; ------------ printa tempo total ------------------------
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_t_total
+    mov cx,14  ; Length of the string
+    int 21h
+
+    cmp t_horas,0
+    je pula_hrs
+    cmp t_horas,9
+    ja cont_print_hrs2
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_0
+    mov cx,1  ; Length of the string
+    int 21h
+
+    cont_print_hrs2:
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_t_total_h
+    mov cx,3  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_dp
+    mov cx,1  ; Length of the string
+    int 21h
+
+
+    pula_hrs:
+    cmp t_min,0
+    je pula_min
+    cmp t_min,9
+    ja cont_print_min2
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_0
+    mov cx,1  ; Length of the string
+    int 21h
+
+    cont_print_min2:
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_t_total_m
+    mov cx,3  ; Length of the string
+    int 21h
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_dp
+    mov cx,1  ; Length of the string
+    int 21h
+
+    pula_min:
+    cmp t_sec,9
+    ja cont_print_sec2
+    
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_0
+    mov cx,1  ; Length of the string
+    int 21h
+
+    cont_print_sec2:
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_t_total_s
+    mov cx,3  ; Length of the string
+    int 21h
+
+    jmp fim_prog
+
 fim_prog: nop
 .exit
 
 
 
+trata_tempo proc near
+    cmp ax, 3600
+    jge trata_horas
+    cmp ax, 60
+    jge trata_minutos
+    jmp trata_segundos
+
+    trata_horas:
+        cmp ax,3600
+        jl fim_trata_horas
+        sub ax,3600
+        inc t_horas
+        jmp trata_horas
+
+        fim_trata_horas:
+            cmp ax,60
+            jge trata_minutos
+            jmp trata_segundos
+    
+    trata_minutos:
+        cmp ax,60
+        jl fim_trata_minutos
+        sub ax,60
+        inc t_min
+        jmp trata_minutos
+
+        fim_trata_minutos:
+            cmp ax,0
+            je fim_trata_tempo
+            jmp trata_segundos
+    
+    trata_segundos:
+        cmp ax,0
+        je fim_trata_tempo
+        sub ax,1
+        inc t_sec
+        jmp trata_segundos
+    
+fim_trata_tempo:
+    ret
+
+trata_tempo endp
+
 
 pega_string_fio proc near
+    and ax,0
 
     mov al,[bx]
     cmp al,TAB 
@@ -628,6 +1024,8 @@ pega_string_fio endp
 
 
 le_ate_LF proc near
+    and ax,0
+
     mov al,[bx]
     cmp al, LF
     je fim_le_ate_LF
@@ -646,6 +1044,8 @@ le_ate_LF endp
 
 
 le_ate_virgula proc near
+    and ax,0
+
     mov al,[bx]
     cmp al, VIRGULA
     je fim_le_ate_virgula
@@ -662,6 +1062,8 @@ le_ate_virgula proc near
 le_ate_virgula endp
 
 le_buffer_ate_lf proc near
+    and ax,0
+
     mov al,[bx]
     cmp al, LF
     je fim_le_buffer_ate_lf
@@ -678,6 +1080,8 @@ le_buffer_ate_lf proc near
 le_buffer_ate_lf endp
 
 limpa_buffer_ate_lf proc near
+    and ax,0
+
     mov al,[si]
     cmp al, LF
     je fim_limpa_buffer_ate_lf
@@ -693,15 +1097,17 @@ limpa_buffer_ate_lf endp
 
 
 comp_fim_arquivo proc near
+    and bx,0
+    and ax,0
     
     and igual,0
-    mov al,[bx]
-    mov dl , [si]
+    mov al,[di]
+    mov bl , [si]
     cmp al,0
     je fim_comp_fim_arquivo_igu
-    inc bx
+    inc di
     inc si
-    cmp al,dl
+    cmp al,bl
     jne fim_comp_fim_arquivo_dif
     jmp comp_fim_arquivo
     
@@ -713,13 +1119,11 @@ comp_fim_arquivo proc near
 
 comp_fim_arquivo endp
     
-
-
-
     
 ;; testa se o fio tem erro, ou seja, se após um espaco ou tab , vem um numero -> se sim, aumento o flag de erro
 testa_erro_fio proc near
     and erro_fio,0
+    and ax,0
 
     mov al,[bx]
     cmp al,0
@@ -737,6 +1141,8 @@ testa_erro_fio proc near
         ret
     
     testa_num_pos_espaco:
+        and ax,0
+
         mov si,bx
         inc si
         mov al,[si]
@@ -960,44 +1366,10 @@ atoi_1:
 atoi	endp
 
 
-
-
 ;;- Escrever uma rotina para converter um n�mero com 16 bits em um string
 ;	- O valor de 16 bits entra no registrador AX
 ;	- O ponteiro para o string entra em DS:BX
 ;	- Um string � uma seq��ncia de caracteres ASCII que termina com 00H (�\0�)
-
-;Fun��o: Converte um inteiro (n) para (string)
-;		 sprintf(string, "%d", n)
-;
-;void sprintf_w(char *string->BX, WORD n->AX) {
-;	k=5;
-;	m=10000;
-;	f=0;
-;	do {
-;		quociente = n / m : resto = n % m;	// Usar instru��o DIV
-;		if (quociente || f) {
-;			*string++ = quociente+'0'
-;			f = 1;
-;		}
-;		n = resto;
-;		m = m/10;
-;		--k;
-;	} while(k);
-;
-;	if (!f)
-;		*string++ = '0';
-;	*string = '\0';
-;}
-;
-;Associa��o de variaveis com registradores e mem�ria
-;	string	-> bx
-;	k		-> cx
-;	m		-> sw_m dw
-;	f		-> sw_f db
-;	n		-> sw_n	dw
-;--------------------------------------------------------------------
-
 sprintf_w	proc	near
 push dx
 push cx
