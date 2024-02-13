@@ -20,6 +20,7 @@ str_opcao_i db "Opcao [-i]: ",0
 str_opcao_o db "Opcao [-o]: ",0
 str_opcao_v db "Opcao [-v]: ",0
 str_dp db ":",0
+str_dp_b db ":"
 
 str_relatorio_saida db "Relatorio de saida:",CR,LF,0
 
@@ -82,12 +83,13 @@ t_q_tensao dw 0
 t_q_tensao_h db 128 dup(0)
 t_q_tensao_m db 128 dup(0) 
 t_q_tensao_s db 128 dup(0) 
-
+str_tq_tensao db "Tempo de qualidade da tensao: ",0
 
 t_sem_tensao dw 0
 t_sem_tensao_h db 128 dup(0)
 t_sem_tensao_m db 128 dup(0) 
 t_sem_tensao_s db 128 dup(0) 
+str_sem_tensao db "Tempo sem tensao: ",0
 
 
 t_total_str db 128 dup(0)
@@ -102,6 +104,7 @@ str_t_total_s db 128 dup(0)
 
 str_t_total db "Tempo total: ",0
 str_0 db "0",0
+str_0_b db "0"
 str_relatorio db "Relatorio: ",0
 
 conteudo_arq_in db 50000 dup(0)
@@ -445,6 +448,7 @@ arquivos:
     and t_total,0
     and t_q_tensao,0
     and t_sem_tensao,0
+    and cont_test,0
 
 
     loop_le_linha:
@@ -705,6 +709,9 @@ arquivos:
         jmp loop_le_linha
 
 relatorio_tela:
+    cmp cont_test,0
+    jne fim_prog
+
     lea bx, str_lf
     call printf_s
     lea bx,str_relatorio
@@ -903,7 +910,7 @@ relatorio_arqout:
 
     mov ah, 40h ; Function 40h - write to file
     mov bx, handle_arq_out
-    lea dx, str_dp
+    lea dx, str_dp_b
     mov cx,1  ; Length of the string
     int 21h
 
@@ -916,7 +923,7 @@ relatorio_arqout:
 
     mov ah, 40h ; Function 40h - write to file
     mov bx, handle_arq_out
-    lea dx, str_0
+    lea dx, str_0_b
     mov cx,1  ; Length of the string
     int 21h
 
@@ -929,7 +936,7 @@ relatorio_arqout:
 
     mov ah, 40h ; Function 40h - write to file
     mov bx, handle_arq_out
-    lea dx, str_dp
+    lea dx, str_dp_b
     mov cx,1  ; Length of the string
     int 21h
 
@@ -939,7 +946,7 @@ relatorio_arqout:
     
     mov ah, 40h ; Function 40h - write to file
     mov bx, handle_arq_out
-    lea dx, str_0
+    lea dx, str_0_b
     mov cx,1  ; Length of the string
     int 21h
 
@@ -948,6 +955,209 @@ relatorio_arqout:
     mov bx, handle_arq_out
     lea dx, str_t_total_s
     mov cx,3  ; Length of the string
+    int 21h
+    
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_lf
+    mov cx,2  ; Length of the string
+    int 21h
+;------------- Escreve o tempo de qualidade e sem tensao no arquivo de saida -------------------    
+
+    and t_horas,0
+    and t_min,0
+    and t_sec,0
+
+    ;; escreve msg tensao de qualidade
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_tq_tensao
+    mov cx,31  ; Length of the string
+    int 21h
+
+    mov ax,t_q_tensao
+    call trata_tempo
+
+    cmp t_horas,0
+    je talvez_printa_total_min2
+
+    cmp t_horas,9
+    ja cont_print_hrs3
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_0_b
+    mov cx,1  ; Length of the string
+    int 21h
+
+    cont_print_hrs3:
+    mov ax, t_horas
+    lea bx, t_q_tensao_h
+    call sprintf_w
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, t_q_tensao_h
+    mov cx,3  ; Length of the string
+    int 21h
+    jmp printa_total_min2
+
+    talvez_printa_total_min2:
+        cmp t_min,0
+        je printa_total_sec2
+    
+    printa_total_min2:
+        cmp t_min,9
+        ja cont_print_min3
+
+        mov ah, 40h ; Function 40h - write to file
+        mov bx, handle_arq_out
+        lea dx, str_0_b
+        mov cx,1  ; Length of the string
+        int 21h
+
+        cont_print_min3:
+            mov ax, t_min
+            lea bx, t_q_tensao_m
+            call sprintf_w
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, t_q_tensao_m
+            mov cx,3  ; Length of the string
+            int 21h
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, str_dp_b
+            mov cx,1  ; Length of the string
+            int 21h
+
+            jmp printa_total_sec2
+        
+    printa_total_sec2:
+        cmp t_sec,9
+        ja cont_print_sec3
+
+        mov ah, 40h ; Function 40h - write to file
+        mov bx, handle_arq_out
+        lea dx, str_0_b
+        mov cx,1  ; Length of the string
+        int 21h
+
+        cont_print_sec3:
+            mov ax, t_sec
+            lea bx, t_q_tensao_s
+            call sprintf_w
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, t_q_tensao_s
+            mov cx,3  ; Length of the string
+            int 21h
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, str_lf
+            mov cx,2  ; Length of the string
+            int 21h
+
+;-----------------------------------------------------------
+    and t_horas,0
+    and t_min,0
+    and t_sec,0
+
+    ;; escreve msg tensao de qualidade
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_sem_tensao
+    mov cx,19  ; Length of the string
+    int 21h
+
+    mov ax,t_sem_tensao
+    call trata_tempo
+
+    cmp t_horas,0
+    je talvez_printa_total_min3
+
+    cmp t_horas,9
+    ja cont_print_hrs4
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, str_0_b
+    mov cx,1  ; Length of the string
+    int 21h
+
+    cont_print_hrs4:
+    mov ax, t_horas
+    lea bx, t_sem_tensao_h
+    call sprintf_w
+
+    mov ah, 40h ; Function 40h - write to file
+    mov bx, handle_arq_out
+    lea dx, t_sem_tensao_h
+    mov cx,3  ; Length of the string
+    int 21h
+    jmp printa_total_min3
+
+    talvez_printa_total_min3:
+        cmp t_min,0
+        je printa_total_sec3
+    
+    printa_total_min3:
+        cmp t_min,9
+        ja cont_print_min4
+
+        mov ah, 40h ; Function 40h - write to file
+        mov bx, handle_arq_out
+        lea dx, str_0_b
+        mov cx,1  ; Length of the string
+        int 21h
+
+        cont_print_min4:
+            mov ax, t_min
+            lea bx, t_sem_tensao_m
+            call sprintf_w
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, t_sem_tensao_m
+            mov cx,3  ; Length of the string
+            int 21h
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, str_dp_b
+            mov cx,1  ; Length of the string
+            int 21h
+
+            jmp printa_total_sec3
+        
+    printa_total_sec3:
+        cmp t_sec,9
+        ja cont_print_sec4
+
+        mov ah, 40h ; Function 40h - write to file
+        mov bx, handle_arq_out
+        lea dx, str_0_b
+        mov cx,1  ; Length of the string
+        int 21h
+
+        cont_print_sec4:
+            mov ax, t_sec
+            lea bx, t_sem_tensao_s
+            call sprintf_w
+
+            mov ah, 40h ; Function 40h - write to file
+            mov bx, handle_arq_out
+            lea dx, t_sem_tensao_s
+            mov cx,3  ; Length of the string
+            int 21h
+
+    ;;fecha arquivo de saida
+    mov ah, 3Eh ; Function 3Eh - close file
+    mov bx, handle_arq_out
     int 21h
 
     jmp fim_prog
@@ -1231,9 +1441,6 @@ fim_puts_nome_arq:
     mov [si],0
     ret
 puts_nome_arq endp
-
-
-
 
 ;;printf_s: rotina para imprimir strings
 printf_s	proc	near
