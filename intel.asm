@@ -397,9 +397,6 @@ arquivos:
 
     
 
-
-
-
     ;; conteudo_arq_in: aramazena o cnteudo do arquivo inteiro
     ;; buffer_arq_in : armazena a linha inteira
     ;; end_atual_arqin : armazena o endereço atual da linha (serve para passar para a proxima linha)
@@ -423,9 +420,7 @@ arquivos:
 
         mov bx,128
         lea si, fio3
-        call limpa_buffer
-
-       
+        call limpa_buffer    
 
         ;; armazena no buffer_arq_in a linha // o cx armazena o endereco da prox linha
 
@@ -597,6 +592,7 @@ arquivos:
             
    test_fim_loop_le_linha:
         mov bx,cx
+        lea si, word_fim
         call comp_fim_arquivo
         cmp igual,1
         je fim_prog
@@ -833,8 +829,6 @@ puts_nome_arq endp
 
 
 
-
-
 ;;printf_s: rotina para imprimir strings
 printf_s	proc	near
 
@@ -861,6 +855,33 @@ ps_1:
 	ret
 	
 printf_s	endp
+
+
+printf_s_lf	proc	near
+
+
+;	While (*s!='\0') {
+	mov		dl,[bx]
+	cmp		dl,LF
+	je		ps_1_lf
+
+;		putchar(*s)
+	push	bx
+	mov		ah,2
+	int		21H
+	pop		bx
+
+;		++s;
+	inc		bx
+		
+;	}
+	jmp		printf_s_lf
+		
+ps_1_lf:
+    
+	ret
+	
+printf_s_lf	endp
 
 
 
