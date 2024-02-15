@@ -21,6 +21,7 @@ str_opcao_o db "Opcao [-o]: ",0
 str_opcao_v db "Opcao [-v]: ",0
 str_dp db ":",0
 str_dp_b db ":"
+str_checando db "Checando arquivo de entrada...",CR,LF,0
 
 str_relatorio_saida db "Relatorio de saida:",CR,LF,0
 
@@ -430,6 +431,9 @@ arquivos:
         LEA DX, arq_out
         INT 21H
         mov handle_arq_out,ax
+    
+    lea bx, str_checando
+    call printf_s
 
     ;; le o arquivo de entrada e coloca num buffer
     MOV AH, 3FH
