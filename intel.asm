@@ -703,10 +703,9 @@ arquivos:
      
             
    test_fim_loop_le_linha:      
-        mov di,cx
-        lea si, word_fim
-        call comp_fim_arquivo
-        cmp igual,1
+        mov bx,cx
+        mov al,[bx]
+        cmp al,'f'
         je relatorio_tela
         cmp cx , 26
         je relatorio_tela
